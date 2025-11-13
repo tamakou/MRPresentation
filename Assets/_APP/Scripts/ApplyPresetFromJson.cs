@@ -15,7 +15,7 @@ using UnityEngine.Rendering;
 public sealed class ApplyPresetFromJson : MonoBehaviour
 {
   [Header("JSON (Resources path, without .json)")]
-  [SerializeField] private string jsonResourcePath = "preset7";
+  [SerializeField] private string jsonResourcePath = "preset6";
 
   [Header("対象ルート (未指定時は自身)")]
   [SerializeField] private Transform outmeshRoot;
