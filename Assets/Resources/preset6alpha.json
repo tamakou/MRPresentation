@@ -134,7 +134,7 @@
     },
     {
       "Name": "roi_marker",
-      "Display": 0,
+      "Display": 1,
       "MLut": {
         "R": 81,
         "G": 198,

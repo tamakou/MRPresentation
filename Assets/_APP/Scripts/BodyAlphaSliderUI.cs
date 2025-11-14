@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
@@ -37,6 +38,10 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
   Slider _slider;
   Text _valueText;
 
+  // ★ ネットワーク用フック
+  public event Action<float> SliderValueChanged;
+  public float CurrentAlpha { get; private set; }
+
   void Start()
   {
     if (outmeshRoot == null) outmeshRoot = transform;
@@ -45,7 +50,8 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
     EnsureBodyMaterialsSetup();
 
     var startAlpha = DetermineCurrentAlpha();
-    if (float.IsNaN(startAlpha)) startAlpha = Mathf.Clamp01(initialAlpha);
+    if (float.IsNaN(startAlpha))
+      startAlpha = Mathf.Clamp01(initialAlpha);
 
     BuildUI(startAlpha);
     ApplyAlpha(startAlpha);
@@ -80,8 +86,10 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
       if (m == null) continue;
 
       // Body を最後に描画（透明の衝突を避ける）
-      if (bodyRenderQueue > 0) m.renderQueue = bodyRenderQueue; // Transparent(3000)+α
-                                                                // 片面描画（軽量）
+      if (bodyRenderQueue > 0)
+        m.renderQueue = bodyRenderQueue; // Transparent(3000)+α
+
+      // 片面描画（軽量）
       if (forceCullBack && m.HasProperty(ID_Cull))
         m.SetInt(ID_Cull, (int)CullMode.Back);
     }
@@ -97,7 +105,6 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
     r.GetPropertyBlock(_mpb, i);
 
     Color c;
-    // Unity 6 の MPB は HasColor/GetColor が使える
     if (_mpb.HasColor(ID_BaseColor))
       c = _mpb.GetColor(ID_BaseColor);
     else
@@ -211,6 +218,9 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
   {
     ApplyAlpha(v);
     UpdateValueText(v);
+
+    // ネットワーク側へ通知
+    SliderValueChanged?.Invoke(v);
   }
 
   void UpdateValueText(float v)
@@ -222,6 +232,7 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
   void ApplyAlpha(float alpha)
   {
     alpha = Mathf.Clamp01(alpha);
+    CurrentAlpha = alpha;
 
     foreach (var (r, i) in _targets)
     {
@@ -234,13 +245,29 @@ public sealed class BodyAlphaSliderUI : MonoBehaviour
       else
       {
         var m = r.sharedMaterials[i];
-        c = (m != null && m.HasProperty(ID_BaseColor)) ? m.GetColor(ID_BaseColor) : Color.white;
+        c = (m != null && m.HasProperty(ID_BaseColor))
+            ? m.GetColor(ID_BaseColor)
+            : Color.white;
       }
 
       c.a = alpha;
       _mpb.SetColor(ID_BaseColor, c);
       r.SetPropertyBlock(_mpb, i);
     }
+  }
+
+  /// <summary>
+  /// ネットワークから受け取った α(0..1) を UI + Body に反映する。
+  /// </summary>
+  public void ApplyAlphaFromNetwork(float alpha)
+  {
+    alpha = Mathf.Clamp01(alpha);
+
+    if (_slider != null)
+      _slider.SetValueWithoutNotify(alpha);
+
+    ApplyAlpha(alpha);
+    UpdateValueText(alpha);
   }
 
   static string Normalize(string s)
